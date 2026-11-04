@@ -11,7 +11,7 @@ Ilmainen selainpohjainen laskugeneraattori (vrt. ilmainenlaskutusohjelma.fi/invo
 ## Ominaisuudet (MVP)
 
 - Laskuttajan, vastaanottajan ja laskun tiedot samalla kenttävalikoimalla kuin alkuperäisessä
-- Laskurivit: nimike, määrä, yksikkö, veroton á-hinta, ALV-kanta (25,5 / 14 / 10 / 0 %)
+- Laskurivit: nimike, määrä, yksikkö, á-hinta (veroton tai "sis. ALV" -valinnalla verollinen), ALV-kanta (25,5 / 14 / 10 / 0 %)
 - Automaattinen laskenta: rivikohtainen veroton, ALV ja yhteensä; ALV-erittely kannoittain; loppusumma (laskenta sentteinä, ei liukulukuvirheitä)
 - Tulostettava A4-lasku selaimen tulostustoiminnolla
 
@@ -23,6 +23,7 @@ Ilmainen selainpohjainen laskugeneraattori (vrt. ilmainenlaskutusohjelma.fi/invo
 - **Viitenumeron automaattinen muodostus** laskun numerosta tarkistenumeroineen (painot 7-3-1) sekä käsin syötetyn viitteen tarkisteen validointi
 - **IBAN-validointi** (mod 97) ja **BIC:n automaattinen tunnistus** suomalaisesta tilinumerosta
 - **Eräpäivän automaattinen laskenta** maksuehdosta
+- **Korkolain mukainen viivästyskorko automaattisesti** — viitekorko (EKP:n perusrahoitusoperaatioiden korko ennen puolivuotiskauden alkua, pyöristettynä ylöspäin lähimpään puoleen prosenttiyksikköön) + 8 %-yksikköä laskun päiväyksen mukaan; voi muokata käsin
 - **ALV-tunnisteen automaattinen muodostus** Y-tunnuksesta
 - **Asiakasrekisteri** — tallenna asiakkaan tiedot nimellä ja hae ne pudotusvalikosta seuraavaa laskua varten; tallennus "Tallenna asiakas" -napilla, samanniminen tallennus päivittää aiemmat tiedot
 - **Varmuuskopiointi** — "Vie varmuuskopio" lataa kaikki tiedot (omat tiedot, logo, asiakasrekisteri, avoin lasku) JSON-tiedostona koneelle; "Tuo varmuuskopio" palauttaa ne samaan tai toiseen selaimeen/koneeseen
@@ -36,6 +37,6 @@ Ilmainen selainpohjainen laskugeneraattori (vrt. ilmainenlaskutusohjelma.fi/invo
 
 ## Huomioita
 
-- Kaikki tiedot pysyvät omalla koneella — mitään ei lähetetä minnekään.
+- Kaikki tiedot pysyvät omalla koneella — laskun tietoja ei lähetetä minnekään. Ainoa verkkopyyntö on EKP:n avoimen datan rajapinnasta (data-api.ecb.europa.eu) kerran päivässä haettava ohjauskorko viivästyskoron laskemiseksi. Jos haku ei onnistu, käytetään sovellukseen sisäänrakennettua korkohistoriaa.
 - Pankkiviivakoodin summakenttä koodataan nollina, jos summa on 0 € tai yli 999 999,99 € (spesifikaation mukaisesti).
 - Viivakoodilogiikka on testattu Finanssialan pankkiviivakoodioppaan esimerkkiä vasten.

@@ -249,6 +249,63 @@ function code128Svg(digits, { heightMm = 12, widthMm = 105 } = {}) {
     `shape-rendering="crispEdges" role="img" aria-label="Pankkiviivakoodi">${bars}</svg>`;
 }
 
+/* --- Late-payment interest (viivästyskorko, korkolaki 633/1982) ---
+ * Viitekorko (12 §) = the ECB main refinancing rate applied in its last operation
+ * before the half-year starts (1.1. / 1.7.), rounded UP to the nearest 0.5 %-point.
+ * Viivästyskorko = viitekorko + 8 %-points between businesses (4 a §), + 7 otherwise (4 §). */
+
+const LATE_INTEREST_MARGIN_B2B = 8;
+const LATE_INTEREST_MARGIN_CONSUMER = 7;
+
+// Built-in fallback: ECB main refinancing rate changes [effective date, rate %].
+// Updated automatically from the ECB API at runtime; this list is only used offline.
+const ECB_MRO_BUILTIN = {
+  asOf: "2026-11-04",
+  changes: [
+    ["2016-03-16", 0], ["2022-07-27", 0.5], ["2022-09-14", 1.25], ["2022-11-02", 2],
+    ["2022-12-21", 2.5], ["2023-02-08", 3], ["2023-03-22", 3.5], ["2023-05-10", 3.75],
+    ["2023-06-21", 4], ["2023-08-02", 4.25], ["2023-09-20", 4.5], ["2024-06-12", 4.25],
+    ["2024-09-18", 3.65], ["2024-10-23", 3.4], ["2024-12-18", 3.15], ["2025-02-05", 2.9],
+    ["2025-03-12", 2.65], ["2025-04-23", 2.4], ["2025-06-11", 2.15], ["2026-06-17", 2.4],
+    ["2026-09-16", 2.65],
+  ],
+};
+
+const ECB_MRO_URL = "https://data-api.ecb.europa.eu/service/data/FM/B.U2.EUR.4F.KR.MRR_FR.LEV" +
+  "?format=csvdata&detail=dataonly&startPeriod=2016-01-01";
+
+/* Half-year containing isoDate: { start: "YYYY-01-01"|"YYYY-07-01", end: "YYYY-06-30"|"YYYY-12-31" } */
+function halfYearOf(isoDate) {
+  const [y, m] = isoDate.split("-").map(Number);
+  return m <= 6 ? { start: `${y}-01-01`, end: `${y}-06-30` } : { start: `${y}-07-01`, end: `${y}-12-31` };
+}
+
+/* Statutory reference rate for the half-year containing isoDate, or null if unknown. */
+function viitekorkoFor(isoDate, changes) {
+  const { start } = halfYearOf(isoDate);
+  let rate = null;
+  for (const [date, r] of changes) if (date < start) rate = r; // changes are sorted ascending
+  if (rate === null) return null;
+  return Math.ceil(rate * 2 - 1e-9) / 2 + 0; // + 0 turns -0 into 0
+}
+
+/* Parse the ECB SDMX CSV (TIME_PERIOD, OBS_VALUE columns) into sorted [date, rate] pairs. */
+function parseEcbCsv(csv) {
+  const lines = csv.trim().split(/\r?\n/);
+  const header = lines.shift().split(",");
+  const iDate = header.indexOf("TIME_PERIOD"), iVal = header.indexOf("OBS_VALUE");
+  if (iDate < 0 || iVal < 0) return [];
+  const out = [];
+  for (const line of lines) {
+    const cols = line.split(",");
+    const date = cols[iDate], rate = Number(cols[iVal]);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && cols[iVal] !== "" && Number.isFinite(rate)) out.push([date, rate]);
+  }
+  return out.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+}
+
+function formatPercent(n) { return String(n).replace(".", ","); }
+
 /* =====================================================================
  * Application state + DOM wiring
  * ===================================================================== */
@@ -262,7 +319,7 @@ const state = {
   rows: [],
   customers: [], // saved buyer records, unique by lowercased name
   // true once the user edits these by hand, so auto-fill stops overriding
-  manual: { reference: false, dueDate: false, vatId: false, bic: false },
+  manual: { reference: false, dueDate: false, vatId: false, bic: false, lateInterest: false },
 };
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -325,6 +382,7 @@ function applyAutoFills(changedId) {
   if (changedId === "dueDate") manual.dueDate = true;
   if (changedId === "sellerVatId") manual.vatId = $("sellerVatId").value.trim() !== "";
   if (changedId === "sellerBic") manual.bic = $("sellerBic").value.trim() !== "";
+  if (changedId === "lateInterest") manual.lateInterest = $("lateInterest").value.trim() !== "";
 
   if (!manual.reference) {
     const auto = makeViite(inv.number);
@@ -360,6 +418,58 @@ function applyAutoFills(changedId) {
     const auto = bicFromIban(seller.iban);
     if (auto) { seller.bic = auto; $("sellerBic").value = auto; }
   }
+
+  if (!manual.lateInterest) {
+    const info = lateInterestInfo();
+    const auto = info ? formatPercent(info.b2b) : "";
+    inv.lateInterest = auto;
+    $("lateInterest").value = auto;
+  }
+}
+
+/* ---- ECB rates for viivästyskorko: built-in fallback, cached, refreshed daily ---- */
+
+const RATES_CACHE_KEY = "laskutusohjelma.ecbRates";
+let ecbRates = { ...ECB_MRO_BUILTIN, source: "builtin" };
+
+function loadCachedRates() {
+  try {
+    const c = JSON.parse(localStorage.getItem(RATES_CACHE_KEY));
+    if (c && Array.isArray(c.changes) && c.changes.length && c.asOf > ecbRates.asOf) {
+      ecbRates = { asOf: c.asOf, changes: c.changes, source: "cache" };
+    }
+  } catch (_) { /* ignore */ }
+}
+
+async function refreshEcbRates() {
+  if (ecbRates.asOf === todayIso()) return; // already fresh today
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const res = await fetch(ECB_MRO_URL, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const changes = parseEcbCsv(await res.text());
+    if (!changes.length) return;
+    ecbRates = { asOf: todayIso(), changes, source: "ecb" };
+    try { localStorage.setItem(RATES_CACHE_KEY, JSON.stringify({ asOf: ecbRates.asOf, changes })); } catch (_) { /* ignore */ }
+    onChange("ecbRates");
+  } catch (_) { /* offline or API down — keep fallback */ }
+}
+
+/* Viivästyskorko for the current invoice date, or null if it can't be determined. */
+function lateInterestInfo() {
+  const date = state.invoice.date || todayIso();
+  const viite = viitekorkoFor(date, ecbRates.changes);
+  if (viite === null) return null;
+  const period = halfYearOf(date);
+  return {
+    viite, period,
+    b2b: viite + LATE_INTEREST_MARGIN_B2B,
+    consumer: viite + LATE_INTEREST_MARGIN_CONSUMER,
+    // data fetched before the half-year began may miss a late rate change
+    estimate: ecbRates.asOf < period.start,
+  };
 }
 
 /* ---- Backup: export / import as a JSON file ---- */
@@ -548,6 +658,18 @@ function renderLogoControl() {
 /* ---- Validation hints ---- */
 
 function updateHints() {
+  const liHint = $("lateInterestHint"), li = lateInterestInfo();
+  if (state.manual.lateInterest) {
+    liHint.textContent = "Syötetty käsin." + (li ? ` Tyhjennä kenttä palauttaaksesi korkolain mukaisen koron (${formatPercent(li.b2b)} %).` : "");
+  } else if (li) {
+    liHint.textContent =
+      `Korkolain mukainen: viitekorko ${formatPercent(li.viite)} % (${formatDateFi(li.period.start)}–${formatDateFi(li.period.end)}) + 8 %-yks. ` +
+      `Kuluttaja-asiakkaalle ${formatPercent(li.consumer)} %.` +
+      (li.estimate ? " Arvio: EKP:n uusimpia korkotietoja ei saatu haettua." : "");
+  } else {
+    liHint.textContent = "";
+  }
+
   const ibanEl = $("sellerIban"), ibanHint = $("ibanHint");
   const ibanVal = state.seller.iban.trim();
   if (ibanVal === "") {
@@ -836,6 +958,7 @@ function onChange(changedId) {
 
 function init() {
   loadState();
+  loadCachedRates();
   if (state.rows.length === 0) state.rows.push(newRow());
   if (!state.invoice.date) state.invoice.date = todayIso();
 
@@ -917,6 +1040,7 @@ function init() {
   });
 
   onChange();
+  refreshEcbRates();
 }
 
 if (typeof document !== "undefined") {
@@ -930,5 +1054,6 @@ if (typeof module !== "undefined" && module.exports) {
     viiteCheckDigit, makeViite, isValidViite, formatViite,
     normalizeIban, isValidIban, formatIban, bicFromIban,
     bankBarcodeString, code128CElements, addDays,
+    halfYearOf, viitekorkoFor, parseEcbCsv, ECB_MRO_BUILTIN,
   };
 }
