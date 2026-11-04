@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laskutusohjelma – ilmainen laskugeneraattori</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ FORM PANEL ============ -->
+  <div class="form-panel" id="formPanel">
+    <header class="app-header">
+      <h1>Laskutusohjelma</h1>
+      <p class="subtitle">Täytä tiedot, esikatselu päivittyy automaattisesti. Tiedot tallentuvat selaimeesi.</p>
+    </header>
+
+    <section class="card">
+      <h2>Laskuttajan tiedot (omat tiedot)</h2>
+      <div class="logo-control">
+        <label class="logo-label">Logo
+          <input type="file" id="logoInput" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+          <small class="hint">PNG, JPEG, WebP tai SVG. Näkyy laskun ylälaidassa ja tallentuu selaimeen.</small>
+        </label>
+        <div class="logo-preview" id="logoPreview" hidden>
+          <img id="logoThumb" alt="Logon esikatselu">
+          <button type="button" class="btn btn-danger btn-small" id="logoRemoveBtn">Poista logo</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <label>Nimi / Toiminimi
+          <input type="text" id="sellerName" placeholder="Yritys Oy">
+        </label>
+        <label>Y-tunnus
+          <input type="text" id="sellerBusinessId" placeholder="1234567-8">
+        </label>
+        <label>Lähiosoite
+          <input type="text" id="sellerAddress" placeholder="Esimerkkikatu 1">
+        </label>
+        <label class="postal-row">
+          <span>Postinumero ja -toimipaikka</span>
+          <span class="postal-inputs">
+            <input type="text" id="sellerZip" placeholder="00100" class="zip">
+            <input type="text" id="sellerCity" placeholder="Helsinki">
+          </span>
+        </label>
+        <label>Puhelin
+          <input type="text" id="sellerPhone" placeholder="+358 40 123 4567">
+        </label>
+        <label>Sähköposti
+          <input type="email" id="sellerEmail" placeholder="lasku@yritys.fi">
+        </label>
+        <label>ALV-tunniste
+          <input type="text" id="sellerVatId" placeholder="FI12345678">
+          <small class="hint" id="vatIdHint">Täytetään automaattisesti Y-tunnuksesta, voit muokata.</small>
+        </label>
+        <label>Kotisivu
+          <input type="text" id="sellerWebsite" placeholder="www.yritys.fi">
+        </label>
+        <label>IBAN-tilinumero
+          <input type="text" id="sellerIban" placeholder="FI21 1234 5600 0007 85" autocomplete="off">
+          <small class="hint" id="ibanHint"></small>
+        </label>
+        <label>BIC
+          <input type="text" id="sellerBic" placeholder="NDEAFIHH">
+          <small class="hint" id="bicHint"></small>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Vastaanottajan tiedot</h2>
+      <div class="customer-bar">
+        <select id="customerSelect">
+          <option value="">— Valitse tallennettu asiakas —</option>
+        </select>
+        <button type="button" class="btn btn-secondary btn-small" id="customerSaveBtn">Tallenna asiakas</button>
+        <button type="button" class="btn btn-danger btn-small" id="customerDeleteBtn">Poista</button>
+      </div>
+      <small class="hint" id="customerHint">Tallennetut asiakkaat säilyvät selaimessasi seuraavia laskuja varten.</small>
+      <div class="grid-2">
+        <label>Nimi
+          <input type="text" id="buyerName" placeholder="Asiakas Oy">
+        </label>
+        <label>Yhteyshenkilö
+          <input type="text" id="buyerContact" placeholder="Matti Meikäläinen">
+        </label>
+        <label>Lähiosoite
+          <input type="text" id="buyerAddress" placeholder="Asiakkaankatu 2">
+        </label>
+        <label class="postal-row">
+          <span>Postinumero ja -toimipaikka</span>
+          <span class="postal-inputs">
+            <input type="text" id="buyerZip" placeholder="00100" class="zip">
+            <input type="text" id="buyerCity" placeholder="Helsinki">
+          </span>
+        </label>
+        <label>Y-tunnus (jos yritys)
+          <input type="text" id="buyerBusinessId" placeholder="8765432-1">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Laskun tiedot</h2>
+      <div class="grid-2">
+        <label>Laskun numero
+          <input type="text" id="invoiceNumber" placeholder="1001" inputmode="numeric">
+        </label>
+        <label>Laskun päiväys
+          <input type="date" id="invoiceDate">
+        </label>
+        <label>Maksuehto (päivää)
+          <input type="number" id="paymentTermDays" value="14" min="0" step="1">
+        </label>
+        <label>Eräpäivä
+          <input type="date" id="dueDate">
+          <small class="hint">Lasketaan automaattisesti maksuehdosta, voit muokata.</small>
+        </label>
+        <label>Viitenumero
+          <input type="text" id="referenceNumber" placeholder="10013" inputmode="numeric">
+          <small class="hint" id="refHint">Muodostetaan automaattisesti laskun numerosta tarkisteineen.</small>
+        </label>
+        <label>Viivästyskorko (%)
+          <input type="text" id="lateInterest" placeholder="esim. 11,5" inputmode="decimal">
+        </label>
+      </div>
+      <label class="full">Lisätiedot / huomautukset laskulle
+        <textarea id="invoiceNotes" rows="2" placeholder="esim. Huomautusaika 8 päivää. Kiitos kaupoista!"></textarea>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Laskurivit</h2>
+      <div class="rows-table-wrap">
+        <table class="rows-table">
+          <thead>
+            <tr>
+              <th class="col-desc">Nimike</th>
+              <th class="col-qty">Määrä</th>
+              <th class="col-unit">Yks.</th>
+              <th class="col-price">á hinta €</th>
+              <th class="col-vat">ALV %</th>
+              <th class="col-total">Yhteensä €</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="rowsBody"></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-secondary" id="addRowBtn">+ Lisää rivi</button>
+      <div class="totals-mini" id="totalsMini"></div>
+    </section>
+
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="printBtn">🖨 Tulosta / tallenna PDF</button>
+      <button type="button" class="btn btn-secondary" id="newInvoiceBtn">Uusi lasku (säilytä omat tiedot)</button>
+      <button type="button" class="btn btn-secondary" id="exportBtn">⬇ Vie varmuuskopio</button>
+      <button type="button" class="btn btn-secondary" id="importBtn">⬆ Tuo varmuuskopio</button>
+      <input type="file" id="importInput" accept="application/json,.json" hidden>
+      <button type="button" class="btn btn-danger" id="clearAllBtn">Tyhjennä kaikki</button>
+    </div>
+    <p class="backup-note">Varmuuskopio on JSON-tiedosto, joka sisältää kaikki tiedot: omat tiedot, logon, tallennetut asiakkaat ja avoimen laskun. Sen voi tuoda toiseen selaimeen tai toiselle koneelle.</p>
+  </div>
+
+  <!-- ============ PREVIEW PANEL ============ -->
+  <div class="preview-panel">
+    <div class="preview-scroller">
+      <div class="sheet" id="sheet">
+
+        <div class="inv-header">
+          <div class="inv-seller-head">
+            <img class="inv-logo" id="pLogo" alt="" hidden>
+            <div class="inv-seller-name" id="pSellerName"></div>
+            <div id="pSellerAddress1"></div>
+            <div id="pSellerAddress2"></div>
+          </div>
+          <div class="inv-meta">
+            <div class="inv-title">LASKU</div>
+            <table class="inv-meta-table">
+              <tr><td>Laskun numero</td><td id="pInvoiceNumber"></td></tr>
+              <tr><td>Päiväys</td><td id="pInvoiceDate"></td></tr>
+              <tr><td>Eräpäivä</td><td id="pDueDate"></td></tr>
+              <tr><td>Maksuehto</td><td id="pPaymentTerm"></td></tr>
+              <tr><td>Viitenumero</td><td id="pReference"></td></tr>
+              <tr><td>Viivästyskorko</td><td id="pLateInterest"></td></tr>
+              <tr><td>Y-tunnus</td><td id="pSellerBusinessId"></td></tr>
+              <tr><td>ALV-tunniste</td><td id="pSellerVatId"></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="inv-buyer">
+          <div class="inv-section-label">Vastaanottaja</div>
+          <div class="inv-buyer-name" id="pBuyerName"></div>
+          <div id="pBuyerContact"></div>
+          <div id="pBuyerAddress1"></div>
+          <div id="pBuyerAddress2"></div>
+          <div id="pBuyerBusinessId"></div>
+        </div>
+
+        <table class="inv-rows">
+          <thead>
+            <tr>
+              <th class="t-desc">Nimike</th>
+              <th class="t-num">Määrä</th>
+              <th class="t-num">á hinta</th>
+              <th class="t-num">Veroton</th>
+              <th class="t-num">ALV %</th>
+              <th class="t-num">ALV</th>
+              <th class="t-num">Yhteensä</th>
+            </tr>
+          </thead>
+          <tbody id="pRowsBody"></tbody>
+        </table>
+
+        <div class="inv-totals-wrap">
+          <table class="inv-vat-summary" id="pVatSummary"></table>
+          <table class="inv-totals">
+            <tr><td>Veroton yhteensä</td><td id="pTotalNet"></td></tr>
+            <tr><td>ALV yhteensä</td><td id="pTotalVat"></td></tr>
+            <tr class="grand"><td>Maksettava yhteensä</td><td id="pTotalGross"></td></tr>
+          </table>
+        </div>
+
+        <div class="inv-notes" id="pNotes"></div>
+
+        <div class="inv-payment">
+          <div class="inv-section-label">Maksutiedot</div>
+          <table class="inv-payment-table">
+            <tr><td>Saaja</td><td id="pPaySeller"></td></tr>
+            <tr><td>Tilinumero (IBAN)</td><td id="pPayIban"></td></tr>
+            <tr><td>BIC</td><td id="pPayBic"></td></tr>
+            <tr><td>Viitenumero</td><td id="pPayReference"></td></tr>
+            <tr><td>Eräpäivä</td><td id="pPayDueDate"></td></tr>
+            <tr><td>Summa</td><td id="pPayAmount"></td></tr>
+          </table>
+          <div class="inv-barcode" id="pBarcodeWrap">
+            <div id="pBarcodeSvg"></div>
+            <div class="inv-barcode-number" id="pBarcodeNumber"></div>
+          </div>
+          <div class="inv-barcode-missing" id="pBarcodeMissing"></div>
+        </div>
+
+        <div class="inv-footer" id="pFooter"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
